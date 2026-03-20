@@ -9,7 +9,7 @@ client = anthropic.Anthropic(
 # because the SDK does not support variables.
 message = client.messages.create(
     model="claude-sonnet-4-6",
-    max_tokens=20000,
+    max_tokens=128000,
     temperature=1,
     messages=[
         {
@@ -23,7 +23,8 @@ message = client.messages.create(
         }
     ],
     thinking={
-        "type": "disabled"
-    }
+        "type": "adaptive"
+    },
+    output_config={"effort":"max"}
 )
 print(message.content)
