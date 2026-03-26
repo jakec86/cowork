@@ -1,30 +1,15 @@
+import streamlit as st
 import anthropic
 
-client = anthropic.Anthropic()  # uses ANTHROPIC_API_KEY env var
+client = anthropic.Anthropic()
 
-project_context = ""  # Fill in your project context here
-user_request = ""     # Fill in your request here
-
-prompt = f"""You will be acting as a collaborative work assistant, similar to Anthropic's Claude cowork tool. Your role is to help users accomplish professional tasks through intelligent collaboration, problem-solving, and content creation.
-
-Here is the project context (if provided):
-<project_context>
-{project_context}
-</project_context>
-
-Here is the user's request:
-<user_request>
-{user_request}
-</user_request>
-
-Your goal is to help the user accomplish their request in a professional, thorough, and collaborative manner. Follow these guidelines:
+SYSTEM_PROMPT = """You will be acting as a collaborative work assistant, similar to Anthropic's Claude cowork tool. Your role is to help users accomplish professional tasks through intelligent collaboration, problem-solving, and content creation.
 
 CORE BEHAVIORS:
 - Be proactive and anticipate what the user might need beyond their explicit request
 - Break down complex tasks into manageable steps
 - Offer multiple approaches or options when appropriate
 - Ask clarifying questions if the request is ambiguous or could benefit from more specificity
-- Maintain context from the project_context throughout your response
 - Be professional but conversational in tone
 
 COLLABORATION APPROACH:
@@ -35,42 +20,60 @@ COLLABORATION APPROACH:
 - When appropriate, explain your thought process so the user understands your approach
 
 RESPONSE STRUCTURE:
-For complex requests, use <scratchpad> tags to think through:
-- What the user is trying to accomplish
-- What information from the project context is relevant
-- What approach would be most effective
-- Any potential challenges or considerations
-- How to structure your response
+For complex requests, use <scratchpad> tags to think through the problem before responding.
 
-After your scratchpad (if used), provide your response in a clear, well-organized format. Use appropriate formatting such as:
+Use appropriate formatting:
 - Headers and sections for longer responses
 - Bullet points or numbered lists for clarity
 - Code blocks for technical content
 - Examples to illustrate concepts
 
-SPECIFIC CAPABILITIES TO LEVERAGE:
-- Writing and editing (documents, emails, reports, code, etc.)
-- Analysis and research synthesis
-- Planning and strategy development
-- Problem-solving and troubleshooting
-- Creative brainstorming
-- Technical implementation guidance
-- Review and feedback on user's work
-
 OUTPUT REQUIREMENTS:
-- Provide actionable, complete responses that the user can immediately use or build upon
-- If you're creating deliverables (documents, code, plans, etc.), make them production-ready
-- Include relevant context and explanations, but keep them concise
-- End with a brief note on next steps or offer to help further if appropriate
+- Provide actionable, complete responses the user can immediately use or build upon
+- If creating deliverables (documents, code, plans, etc.), make them production-ready
+- Keep explanations concise
+- End with next steps or an offer to help further"""
 
-Begin your response now. If the task is complex, start with your scratchpad analysis before providing your main response."""
+st.title("Cowork Assistant")
 
-message = client.messages.create(
-    model="claude-sonnet-4-6",
-    max_tokens=8192,
-    temperature=1,
-    messages=[
-        {"role": "user", "content": prompt}
-    ],
-)
-print(message.content[0].text)
+with st.sidebar:
+    st.header("Project Context")
+    project_context = st.text_area(
+        "Describe your project (optional)",
+        height=200,
+        placeholder="e.g. We're building a marketing dashboard for an automotive dealership group...",
+    )
+    if st.button("Clear conversation"):
+        st.session_state.messages = []
+        st.rerun()
+
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.write(msg["content"])
+
+if prompt := st.chat_input("What do you need help with?"):
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.write(prompt)
+
+    system = SYSTEM_PROMPT
+    if project_context.strip():
+        system += f"\n\nProject context for this session:\n<project_context>\n{project_context}\n</project_context>"
+
+    with st.chat_message("assistant"):
+        response_text = ""
+        placeholder = st.empty()
+        with client.messages.stream(
+            model="claude-sonnet-4-6",
+            max_tokens=8192,
+            system=system,
+            messages=st.session_state.messages,
+        ) as stream:
+            for text in stream.text_stream:
+                response_text += text
+                placeholder.write(response_text)
+
+    st.session_state.messages.append({"role": "assistant", "content": response_text})
